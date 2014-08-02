@@ -1,0 +1,5 @@
+
+message test_message_name<10001>[handle_module]{
+ required string				ab 				= 1;
+ required int32					cd					= 2;
+}

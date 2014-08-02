@@ -74,6 +74,17 @@ output(Basename, RawMessages, Options) ->
 
     error_logger:info_msg("Writing header file to ~p~n",[HeaderFile]),
     ok = write_header_include_file(HeaderFile, Messages),
+
+    PbMapFile = case proplists:get_value(output_src_dir, Options) of
+    undefined ->
+        Basename ++ "_map.erl";
+    SrcPath ->
+        filename:join(SrcPath,Basename) ++ "_map.erl"
+    end,
+    Messages1 = lists:map(fun({message, Name, Cmd, Module,  _})->{Name, Cmd, Module} end, RawMessages),
+%    io:format("RawMessages=~w", [RawMessages]),
+    ok = write_pb_map_file(PbMapFile, Messages1),
+
     PokemonBeamFile = code:where_is_file("pokemon_pb.beam"),
     {ok,{_,[{abstract_code,{_,Forms}}]}} = beam_lib:chunks(PokemonBeamFile, [abstract_code]),
 %    io:format("Forms=~w~n",[Forms]),
@@ -311,6 +322,33 @@ write_header_include_file(FileRef, [{Name, Fields} | Tail]) ->
     protobuffs_file:format(FileRef, "~n}).~n", []),
     protobuffs_file:format(FileRef, "-endif.~n~n", []),
     write_header_include_file(FileRef, Tail).
+
+%% @hidden
+write_pb_map_file(BaseName, Messages) when is_list(BaseName)->
+    {ok, FileRef} = protobuffs_file:open(BaseName, [write]),
+    protobuffs_file:format(FileRef, "-module(~s).~n", [filename:basename(BaseName, ".erl")]),
+    protobuffs_file:format(FileRef, "-export([find/2]).~n", []),
+    write_pb_map_file(FileRef, Messages),
+    protobuffs_file:format(FileRef, "find(_,_)->[].",[]),
+    protobuffs_file:close(FileRef);
+write_pb_map_file(_FileRef, []) ->
+    ok;
+write_pb_map_file(FileRef, [{Name, Cmd, Module}|Tail])->
+    Name1 = string:to_lower(Name),
+    if
+        Cmd =:= none ->
+            ok;
+        true->
+            protobuffs_file:format(FileRef, "find(record2cmd,~s)->~s;~n",[Name1, integer_to_list(Cmd)]),
+            protobuffs_file:format(FileRef, "find(cmd2record,~s)->~s;~n",[integer_to_list(Cmd), Name1])
+    end,
+    if
+        Module =:= none ->
+            ok;
+        true->
+            protobuffs_file:format(FileRef, "find(cmd2module,~s)->~s;~n",[integer_to_list(Cmd), Module])
+    end,
+    write_pb_map_file(FileRef, Tail).
 
 %% @hidden
 generate_field_definitions(Fields) ->

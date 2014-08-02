@@ -28,10 +28,10 @@ g_default -> '$empty' : none.
 g_default -> '[' g_var '=' g_value ']' 				: {'$2', '$4'}.
 
 g_cmd -> '$empty' : none.
-g_cmd -> '<' integer '>'				:$2.
+g_cmd -> '<' integer '>'				:unwrap('$2').
 
 g_module -> '$empty' : none.
-g_module -> '[' g_var ']'				:$2.
+g_module -> '[' g_var ']'				:'$2'.
 
 Erlang code.
 safe_string(A) -> make_safe(atom_to_list(A)).
