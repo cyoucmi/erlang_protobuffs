@@ -27,7 +27,7 @@
 -module(protobuffs).
 
 %% Public
--export([encode/3, encode_packed/3, decode/2, decode_packed/2]).
+-export([encode/3, decode/2]).
 
 %% Used by generated *_pb file. Not intended to used by User
 -export([next_field_num/1, skip_next_field/1]).
@@ -64,21 +64,6 @@
 		    iodata().
 encode(FieldID, Value, Type) ->
     encode_internal(FieldID, Value, Type).
-
-%%--------------------------------------------------------------------
-%% @doc Encode an list of Erlang data structure into a Protocol Buffers values.
-%% @end
-%%--------------------------------------------------------------------
--spec encode_packed(FieldID :: non_neg_integer(),
-		    Values :: list(),
-		    Type :: field_type()) ->
-			   binary().
-encode_packed(_FieldID, [], _Type) ->
-    <<>>;
-encode_packed(FieldID, Values, Type) ->
-    PackedValues = encode_packed_internal(Values,Type,[]),
-    Size = encode_varint(iolist_size(PackedValues)),
-    [encode_field_tag(FieldID, ?TYPE_STRING),Size,PackedValues].
 
 %% @hidden
 -spec encode_internal(FieldID :: non_neg_integer(),
@@ -167,17 +152,6 @@ encode_internal(FieldID, Value, Type) ->
     erlang:error(badarg,[FieldID, Value, Type]).
 
 
-%% @hidden
--spec encode_packed_internal(Values :: list(),
-			     ExpectedType :: field_type(),
-			     Acc :: list()) ->
-				    iolist().
-encode_packed_internal([],_Type,Acc) ->
-    lists:reverse(Acc);
-encode_packed_internal([Value|Tail], ExpectedType, Acc) ->
-    [_|V] = encode_internal(1, Value, ExpectedType),
-    encode_packed_internal(Tail, ExpectedType, [V|Acc]).
-
 %%--------------------------------------------------------------------
 %% @doc Will be hidden in future releases
 %% @end
@@ -218,23 +192,6 @@ decode(Bytes, ExpectedType) ->
     {{FieldID, Value}, Rest1}.
 
 %%--------------------------------------------------------------------
-%% @doc Decode packed values from a protobuffs data structure
-%% @end
-%%--------------------------------------------------------------------
--spec decode_packed(Bytes :: binary(), ExpectedType :: field_type()) ->
-			   {{non_neg_integer(), any()}, binary()}.
-decode_packed(Bytes, ExpectedType) ->
-    case read_field_num_and_wire_type(Bytes) of
-	{{FieldID, ?TYPE_STRING}, Rest} ->
-	    {Length, Rest1} = decode_varint(Rest),
-	    {Packed,Rest2} = split_binary(Rest1, Length),
-	    Values = decode_packed_values(Packed, ExpectedType, []),
-	    {{FieldID, Values},Rest2};
-	_Else ->
-	    erlang:error(badarg)
-    end.
-
-%%--------------------------------------------------------------------
 %% @doc Returns the next field number id from a protobuffs data structure
 %% @end
 %%--------------------------------------------------------------------
@@ -264,47 +221,6 @@ skip_next_field(Bytes) ->
             Rest1 = Rest
     end,
     {ok, Rest1}.
-
-%% @hidden
--spec decode_packed_values(Bytes :: binary(),
-			   Type :: field_type(),
-			   Acc :: list()) ->
-				  iolist().
-decode_packed_values(<<>>, _, Acc) ->
-    lists:reverse(Acc);
-decode_packed_values(Bytes, bool, Acc) ->
-    {Value,Rest} = decode_value(Bytes,?TYPE_VARINT, bool),
-    decode_packed_values(Rest, bool, [Value|Acc]);
-decode_packed_values(Bytes, enum, Acc) ->
-    {Value,Rest} = decode_value(Bytes,?TYPE_VARINT, enum),
-    decode_packed_values(Rest, enum, [Value|Acc]);
-decode_packed_values(Bytes, int32, Acc) ->
-    {Value,Rest} = decode_value(Bytes,?TYPE_VARINT, int32),
-    decode_packed_values(Rest, int32, [Value|Acc]);
-decode_packed_values(Bytes, uint32, Acc) ->
-    {Value,Rest} = decode_value(Bytes,?TYPE_VARINT, uint32),
-    decode_packed_values(Rest, uint32, [Value|Acc]);
-decode_packed_values(Bytes, sint32, Acc) ->
-    {Value,Rest} = decode_value(Bytes,?TYPE_VARINT, sint32),
-    decode_packed_values(Rest, sint32, [Value|Acc]);
-decode_packed_values(Bytes, int64, Acc) ->
-    {Value,Rest} = decode_value(Bytes,?TYPE_VARINT, int64),
-    decode_packed_values(Rest, int64, [Value|Acc]);
-decode_packed_values(Bytes, uint64, Acc) ->
-    {Value,Rest} = decode_value(Bytes,?TYPE_VARINT, uint64),
-    decode_packed_values(Rest, uint64, [Value|Acc]);
-decode_packed_values(Bytes, sint64, Acc) ->
-    {Value,Rest} = decode_value(Bytes,?TYPE_VARINT, sint64),
-    decode_packed_values(Rest, sint64, [Value|Acc]);
-decode_packed_values(Bytes, float, Acc) ->
-    {Value,Rest} = decode_value(Bytes,?TYPE_32BIT, float),
-    decode_packed_values(Rest, float, [Value|Acc]);
-decode_packed_values(Bytes, double, Acc) ->
-    {Value,Rest} = decode_value(Bytes,?TYPE_64BIT, double),
-    decode_packed_values(Rest, double, [Value|Acc]);
-decode_packed_values(Bytes, Type, Acc) ->
-    erlang:error(badarg,[Bytes,Type,Acc]).
-
 
 %%--------------------------------------------------------------------
 %% @doc Will be hidden in future releases

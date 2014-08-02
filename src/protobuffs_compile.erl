@@ -60,12 +60,11 @@ scan_file(ProtoFile,Options) when is_atom(ProtoFile) ->
              ok | {error, _}.
 scan_string(String,Basename,Options) ->
     {ok,Messages} = parse_string(String),
-    output(Basename, Messages, [], Options).
+    output(Basename, Messages, Options).
 
 %% @hidden
-output(Basename, RawMessages, RawEnums, Options) ->
-    Enums = canonize_names(RawEnums),
-    Messages = lists:map(fun({message, Name, Fields})->{Name, Fields} end, RawMessages),
+output(Basename, RawMessages, Options) ->
+    Messages = lists:map(fun({message, Name, _, _,  Fields})->{Name, Fields} end, RawMessages),
     HeaderFile = case proplists:get_value(output_include_dir,Options) of
     undefined ->
         Basename ++ ".hrl";
@@ -77,8 +76,11 @@ output(Basename, RawMessages, RawEnums, Options) ->
     ok = write_header_include_file(HeaderFile, Messages),
     PokemonBeamFile = code:where_is_file("pokemon_pb.beam"),
     {ok,{_,[{abstract_code,{_,Forms}}]}} = beam_lib:chunks(PokemonBeamFile, [abstract_code]),
-    io:format("Forms=~w~n",[Forms]),
-    Forms1 = filter_forms(Messages, Enums, Forms, Basename, []),
+%    io:format("Forms=~w~n",[Forms]),
+    Forms1 = filter_forms(Messages, [], Forms, Basename, []),
+
+%    io:fwrite("~s~n", [erl_prettypr:format(erl_syntax:form_list(Forms1))]),
+
     {ok, _, Bytes, _Warnings} = protobuffs_file:compile_forms(Forms1, proplists:get_value(compile_flags,Options,[])),
     BeamFile = case proplists:get_value(output_ebin_dir,Options) of
     undefined ->
@@ -111,6 +113,7 @@ parse_string(String) ->
     case lists:all(fun erlang:is_integer/1, String) of
         true ->
             {ok, Tokens, _Line} = protobuffs_scanner:string(String),
+            io:format("Tokens=~w~n", [Tokens]),
             protobuffs_parser:parse(Tokens);
         false ->
             protobuffs_parser:parse(String)
@@ -236,8 +239,7 @@ filter_iolist_clause({MsgName, Fields0}, {clause,L,_Args,Guards,_Content}) ->
 
 %% @hidden
 expand_decode_function(Msgs, Line, Clause) ->
-    {function,Line,decode,2, [{clause,Line,[{atom,Line,enummsg_values},{integer,Line,1}],[],[{atom,Line,value1}]}] ++
-     [filter_decode_clause(Msgs, Msg, Clause) || Msg <- Msgs]}.
+    {function,Line,decode,2,[filter_decode_clause(Msgs, Msg, Clause) || Msg <- Msgs]}.
 
 %% @hidden
 filter_decode_clause(Msgs, {MsgName, Fields}, {clause,L,_Args,Guards,[_,_,C,D]}) ->
@@ -317,7 +319,7 @@ generate_field_definitions(Fields) ->
 %% @hidden
 generate_field_definitions([], Acc) ->
     lists:reverse(Acc);
-generate_field_definitions([{Name, required, _} | Tail], Acc) ->
+generate_field_definitions([{Name, required, none} | Tail], Acc) ->
     Head = lists:flatten(io_lib:format("~s = erlang:error({required, ~s})", [Name, Name])),
     generate_field_definitions(Tail, [Head | Acc]);
 generate_field_definitions([{Name, _, none} | Tail], Acc) ->
@@ -346,35 +348,3 @@ replace_atom(List, Find, Replace) when is_list(List) ->
 replace_atom(Other, _Find, _Replace) ->
     Other.
 
-%% @hidden
-canonical_name([TypePath | _]) ->
-    % yes, we're assuming the first name in the list is the most
-    % cannonical name.
-    type_path_to_type(TypePath).
-
-canonize_names(Messages) ->
-    canonize_names(Messages, []).
-
-canonize_names([], Acc) ->
-    lists:reverse(Acc);
-canonize_names([Enum | Tail], Acc) when element(1, Enum) == enum ->
-    Name = canonical_name(element(2, Enum)),
-    Enum0 = setelement(2, Enum, Name),
-    canonize_names(Tail, [Enum0 | Acc]);
-canonize_names([Msg | Tail], Acc) ->
-    Name = canonical_name(element(1, Msg)),
-    Msg0 = setelement(1,Msg,Name),
-    canonize_names(Tail, [Msg0 | Acc]).
-
-%% @hidden
-type_path_to_type([[Name|Tuple]]) when is_tuple(Tuple) ->
-    type_path_to_type([Name | tuple_to_list(Tuple)]);
-type_path_to_type(TypePath) when is_tuple(TypePath) ->
-    type_path_to_type(tuple_to_list(TypePath));
-type_path_to_type(TypePath) ->
-    case is_list(hd(TypePath)) of
-        true ->
-            string:join(lists:reverse(TypePath), "_");
-        false ->
-            TypePath
-    end.

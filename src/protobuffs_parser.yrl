@@ -1,5 +1,5 @@
 Nonterminals
-g_protobuffs g_message g_element g_elements g_var g_value g_default.
+g_protobuffs g_message g_element g_elements g_var g_value g_default g_cmd g_module.
 
 Terminals ';' '=' '{' '}' '[' ']' '<' '>' string integer float var.
 
@@ -9,13 +9,13 @@ Endsymbol '$end'.
 g_protobuffs -> '$empty'					: [].
 g_protobuffs -> g_message g_protobuffs 				: ['$1'|'$2'].
 
-g_message -> g_var g_var '{' g_elements '}'			: {'$1', safe_string('$2'), '$4'}.
-g_message -> g_var g_var '{' '}'					: {'$1', safe_string('$2'), []}.
+g_message -> g_var g_var g_cmd g_module  '{' g_elements '}'			: {'$1', safe_string('$2'), '$3', '$4', '$6'}.
+g_message -> g_var g_var g_cmd g_module  '{' '}'					: {'$1', safe_string('$2'), '$3', '$4',  []}.
 
 g_elements -> g_element						: ['$1'].
 g_elements -> g_element g_elements				: ['$1' | '$2'].
 
-g_element -> g_var g_var g_var '=' integer g_default ';'	: {unwrap('$5'), pack_repeated('$1','$6'), safe_string('$2'), safe_string('$3'), default('$1','$6')}.
+g_element -> g_var g_var g_var '=' integer g_default ';'	: {unwrap('$5'), '$1', safe_string('$2'), safe_string('$3'), default('$1','$6')}.
 
 g_var -> var 							: unwrap('$1').
 
@@ -26,6 +26,12 @@ g_value -> float						: unwrap('$1').
 
 g_default -> '$empty' : none.
 g_default -> '[' g_var '=' g_value ']' 				: {'$2', '$4'}.
+
+g_cmd -> '$empty' : none.
+g_cmd -> '<' integer '>'				:$2.
+
+g_module -> '$empty' : none.
+g_module -> '[' g_var ']'				:$2.
 
 Erlang code.
 safe_string(A) -> make_safe(atom_to_list(A)).
@@ -45,8 +51,3 @@ default(_, {default,D}) ->
   D;
 default(_, _) ->
   none.
-
-pack_repeated(repeated,{packed,true}) ->
-  repeated_packed;
-pack_repeated(Type,_) ->
-  Type.

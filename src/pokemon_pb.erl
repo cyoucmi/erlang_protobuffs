@@ -49,8 +49,6 @@ pack(_, optional, undefined, _, _) -> [];
 
 pack(_, repeated, undefined, _, _) -> [];
 
-pack(_, repeated_packed, undefined, _, _) -> [];
-pack(_, repeated_packed, [], _, _) -> [];
 
 pack(FNum, required, undefined, Type, _) ->
     exit({error, {required_field_is_undefined, FNum, Type}});
@@ -60,9 +58,6 @@ pack(_, repeated, [], _, Acc) ->
 
 pack(FNum, repeated, [Head|Tail], Type, Acc) ->
     pack(FNum, repeated, Tail, Type, [pack(FNum, optional, Head, Type, [])|Acc]);
-
-pack(FNum, repeated_packed, Data, Type, _) ->
-    protobuffs:encode_packed(FNum, Data, Type);
 
 pack(FNum, _, Data, _, _) when is_tuple(Data) ->
     [RecName|_] = tuple_to_list(Data),
@@ -97,14 +92,8 @@ decode(Bytes, Types, Acc) ->
                         RecVal = decode(Type, V),
                         {RecVal, R};
                     false ->
-                        case lists:member(repeated_packed, Opts) of
-                            true ->
-                            {{FNum, V}, R} = protobuffs:decode_packed(Bytes, Type),
-                            {V, R};
-                            false ->
-                            {{FNum, V}, R} = protobuffs:decode(Bytes, Type),
-                            {unpack_value(V, Type), R}
-                        end
+                        {{FNum, V}, R} = protobuffs:decode(Bytes, Type),
+                        {unpack_value(V, Type), R}
                 end,
             case lists:member(repeated, Opts) of
                 true ->
@@ -118,18 +107,8 @@ decode(Bytes, Types, Acc) ->
                     decode(Rest1, Types, [{FNum, Name, Value1}|Acc])
             end;
         false ->
-            case lists:keyfind('$extensions', 2, Acc) of
-                {_,_,Dict} ->
-                    {{FNum, _V}, R} = protobuffs:decode(Bytes, bytes),
-                    Diff = size(Bytes) - size(R),
-                    <<V:Diff/binary,_/binary>> = Bytes,
-                    NewDict = dict:store(FNum, V, Dict),
-                    NewAcc = lists:keyreplace('$extensions', 2, Acc, {false, '$extensions', NewDict}),
-                    decode(R, Types, NewAcc);
-                _ ->
-                    {ok, Skipped} = protobuffs:skip_next_field(Bytes),
-                    decode(Skipped, Types, Acc)
-            end
+            {ok, Skipped} = protobuffs:skip_next_field(Bytes),
+            decode(Skipped, Types, Acc)
     end.
 
 reverse_repeated_fields(FieldList, Types) ->
