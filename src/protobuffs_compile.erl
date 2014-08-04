@@ -84,6 +84,7 @@ output(Basename, RawMessages, Options) ->
     Messages1 = lists:map(fun({message, Name, Cmd, Module,  _})->{Name, Cmd, Module} end, RawMessages),
 %    io:format("RawMessages=~w", [RawMessages]),
     ok = write_pb_map_file(PbMapFile, Messages1),
+    error_logger:info_msg("Writing map file to ~p~n",[PbMapFile]),
 
     PokemonBeamFile = code:where_is_file("pokemon_pb.beam"),
     {ok,{_,[{abstract_code,{_,Forms}}]}} = beam_lib:chunks(PokemonBeamFile, [abstract_code]),
