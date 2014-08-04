@@ -16,7 +16,7 @@ protobuffs_scanner.erl:protobuffs_scanner.xrl
 protobuffs_parser.erl:protobuffs_parser.yrl
 	erlc -o $(OUTDIR) $^
 	
-RCS=$(notdir $(wildcard *.erl))
+RCS=$(notdir $(wildcard *.erl)) protobuffs_scanner.erl protobuffs_parser.erl
 BEAMS=$(patsubst %.erl, %.beam,$(RCS))
 
 erl:$(BEAMS)
